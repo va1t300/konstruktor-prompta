@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Конструктор игры — собери промпт для Qwen</title>
+<style>
+  :root {
+    --violet: #6C3BF5;
+    --violet-dark: #4B22C9;
+    --violet-soft: #E6DDFF;
+    --lav: #F4F0FF;
+    --yellow: #FFD43B;
+    --yellow-dark: #F2B705;
+    --lime: #B9F24A;
+    --ink: #1E1640;
+    --muted: #6B6488;
+    --white: #FFFFFF;
+    --radius: 24px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--lav);
+    line-height: 1.4;
+  }
+  header {
+    background: var(--violet);
+    color: var(--white);
+    padding: 28px 20px 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before, header::after {
+    content: ""; position: absolute; border-radius: 50%;
+  }
+  header::before { width: 220px; height: 220px; background: var(--yellow); right: -60px; top: -80px; }
+  header::after { width: 120px; height: 120px; background: var(--lime); right: 150px; bottom: -70px; }
+  .head-in { max-width: 1180px; margin: 0 auto; position: relative; z-index: 1; }
+  .badge {
+    display: inline-block; background: var(--yellow); color: var(--ink);
+    font-weight: 800; font-size: 14px; padding: 6px 14px; border-radius: 999px;
+  }
+  h1 { font-size: clamp(28px, 5vw, 46px); margin: 14px 0 8px; line-height: 1.1; text-wrap: balance; max-width: 760px; }
+  header p { margin: 0; font-size: clamp(17px, 2.2vw, 21px); max-width: 620px; opacity: .95; }
+
+  main {
+    max-width: 1180px; margin: -40px auto 0; padding: 0 16px 60px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 20px;
+    position: relative; z-index: 2; align-items: start;
+  }
+  .card {
+    background: var(--white); border-radius: var(--radius); padding: 22px;
+    box-shadow: 0 6px 0 var(--violet-soft);
+    margin-bottom: 20px;
+  }
+  .step { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+  .num {
+    flex: none; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--violet); color: var(--white);
+    display: grid; place-items: center; font-weight: 900; font-size: 22px;
+  }
+  h2 { font-size: 24px; margin: 0; }
+  .hint { color: var(--muted); font-size: 16px; margin: -8px 0 14px 56px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
+  .tile {
+    font: inherit; color: inherit; cursor: pointer;
+    background: var(--lav); border: 3px solid transparent; border-radius: 20px;
+    padding: 14px 8px 12px; min-height: 108px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    font-weight: 800; font-size: 17px; text-align: center;
+    transition: transform .12s, background .12s, border-color .12s;
+    position: relative;
+  }
+  .tile .em { font-size: 40px; line-height: 1; }
+  .tile:hover { transform: translateY(-3px); background: var(--violet-soft); }
+  .tile:active { transform: scale(.96); }
+  .tile[aria-pressed="true"] { background: var(--white); border-color: var(--violet); box-shadow: 0 5px 0 var(--violet); }
+  .tile[aria-pressed="true"]::after {
+    content: "✓"; position: absolute; top: -10px; right: -10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--yellow); color: var(--ink); font-weight: 900;
+    display: grid; place-items: center; border: 3px solid var(--white);
+  }
+  .tile:focus-visible, .btn:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 4px solid var(--yellow-dark); outline-offset: 3px;
+  }
+  .swatches { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .swatches .tile { min-height: 92px; font-size: 15px; }
+  .dot { width: 44px; height: 44px; border-radius: 50%; border: 4px solid var(--white); box-shadow: 0 0 0 2px rgba(30,22,64,.15); }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
+  .row h3 { margin: 0 0 10px; font-size: 18px; }
+  .row .tiles { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .row .tile { min-height: 84px; font-size: 15px; padding: 10px 4px; }
+  .row .tile .em { font-size: 30px; }
+  input[type="text"] {
+    width: 100%; font: inherit; font-size: 20px; font-weight: 700; color: var(--ink);
+    padding: 14px 18px; border-radius: 16px; border: 3px solid var(--violet-soft); background: var(--lav);
+  }
+
+  aside { position: sticky; top: 16px; }
+  .scene {
+    height: 230px; border-radius: 20px; position: relative; overflow: hidden;
+    border: 4px solid var(--ink);
+  }
+  .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; }
+  .pipe { position: absolute; width: 46px; border-radius: 10px; border: 3px solid rgba(0,0,0,.35); display: flex; justify-content: center; font-size: 26px; }
+  .pipe.top { top: -6px; align-items: flex-end; padding-bottom: 4px; }
+  .pipe.bot { bottom: 20px; align-items: flex-start; padding-top: 4px; }
+  .hero {
+    position: absolute; left: 22%; top: 38%;
+    width: 62px; height: 62px; border-radius: 50%;
+    border: 4px solid var(--white); box-shadow: 0 4px 0 rgba(0,0,0,.25);
+    display: grid; place-items: center; font-size: 32px;
+    animation: bob 1.4s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translateY(-14px) rotate(-8deg); } 50% { transform: translateY(14px) rotate(8deg); } }
+  @media (prefers-reduced-motion: reduce) { .hero { animation: none; } .tile { transition: none; } }
+  .scene-title {
+    position: absolute; left: 10px; top: 10px; background: rgba(255,255,255,.92);
+    padding: 4px 12px; border-radius: 999px; font-weight: 800; font-size: 14px; max-width: calc(100% - 20px);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sum { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+  .sum li { background: var(--lav); border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 700; }
+
+  h2.small { font-size: 20px; margin: 0 0 10px; }
+  textarea {
+    width: 100%; height: 240px; resize: vertical;
+    font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--ink);
+    background: var(--lav); border: 3px solid var(--violet-soft); border-radius: 16px; padding: 12px;
+  }
+  .btn {
+    font: inherit; font-weight: 900; font-size: 19px; cursor: pointer; text-decoration: none;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; min-height: 62px; border-radius: 18px; border: none; margin-top: 12px;
+    transition: transform .1s, box-shadow .1s;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: none !important; }
+  .btn-copy { background: var(--yellow); color: var(--ink); box-shadow: 0 6px 0 var(--yellow-dark); }
+  .btn-qwen { background: var(--violet); color: var(--white); box-shadow: 0 6px 0 var(--violet-dark); }
+  .btn-copy.done { background: var(--lime); box-shadow: 0 6px 0 #8CC52A; }
+  .how { margin: 16px 0 0; padding: 0 0 0 22px; color: var(--muted); font-size: 15px; }
+  .how li { margin-bottom: 4px; }
+  .how b { color: var(--ink); }
+
+  @media (max-width: 940px) {
+    main { grid-template-columns: 1fr; }
+    aside { position: static; }
+    .hint { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-in">
+    <span class="badge">Для 1–2 класса</span>
+    <h1>Собери свою игру-леталку</h1>
+    <p>Выбери героя, место и задания. Потом скопируй волшебный текст и отдай его нейросети Qwen — она сделает игру!</p>
+  </div>
+</header>
+
+<main>
+  <div>
+    <section class="card">
+      <div class="step"><span class="num">1</span><h2>Кто летит?</h2></div>
+      <div class="tiles" id="hero"></div>
+    </section>
+
+    <section class="card">
+      <div class="step"><span class="num">2</span><h2>Какого цвета герой?</h2></div>
+      <div class="tiles swatches" id="color"></div>
+    </section>
+
+    <section class="card">
+      <div class="step"><span class="num">3</span><h2>Где летим?</h2></div>
+      <div class="tiles" id="loc"></div>
+    </section>
+
+    <section class="card">
+      <div class="step"><span class="num">4</span><h2>Что облетаем?</h2></div>
+      <div class="tiles" id="obs"></div>
+    </section>
+
+    <section class="card">
+      <div class="step"><span class="num">5</span><h2>Какие задания?</h2></div>
+      <p class="hint">Если врежешься — надо решить задание. Можно выбрать несколько предметов.</p>
+      <div class="tiles" id="subj"></div>
+    </section>
+
+    <section class="card">
+      <div class="step"><span class="num">6</span><h2>Настройки</h2></div>
+      <div class="row">
+        <div><h3>Класс</h3><div class="tiles" id="grade"></div></div>
+        <div><h3>Скорость</h3><div class="tiles" id="speed"></div></div>
+        <div><h3>Жизни</h3><div class="tiles" id="lives"></div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step"><span class="num">7</span><h2>Как назовём игру?</h2></div>
+      <input type="text" id="title" maxlength="40" placeholder="Весёлый полёт" aria-label="Название игры">
+    </section>
+  </div>
+
+  <aside>
+    <section class="card">
+      <h2 class="small">Вот твоя игра</h2>
+      <div class="scene" id="scene" aria-hidden="true">
+        <div class="pipe top" style="left:52%;height:74px"></div>
+        <div class="pipe bot" style="left:52%;height:70px"></div>
+        <div class="pipe top" style="left:82%;height:44px"></div>
+        <div class="pipe bot" style="left:82%;height:100px"></div>
+        <div class="ground"></div>
+        <div class="hero" id="heroPrev"></div>
+        <div class="scene-title" id="sceneTitle"></div>
+      </div>
+      <ul class="sum" id="sum"></ul>
+    </section>
+
+    <section class="card">
+      <h2 class="small">Волшебный текст для Qwen</h2>
+      <textarea id="prompt" readonly aria-label="Готовый промпт"></textarea>
+      <button class="btn btn-copy" id="copy" type="button">📋 Скопировать промпт</button>
+      <a class="btn btn-qwen" id="qwen" href="https://chat.qwen.ai/" target="_blank" rel="noopener">🚀 Перейти в Qwen</a>
+      <ol class="how">
+        <li>Нажми <b>«Скопировать промпт»</b>.</li>
+        <li>Нажми <b>«Перейти в Qwen»</b>.</li>
+        <li>Вставь текст в окошко (Ctrl+V) и отправь.</li>
+        <li>Если видишь кнопку <b>«Веб-разработка»</b> или <b>«Артефакты»</b> — включи её, игра откроется прямо в чате.</li>
+      </ol>
+    </section>
+  </aside>
+</main>
+
+<script>
+const DATA = {
+  hero: [
+    { em: '🐦', name: 'Птичка', desc: 'круглая весёлая птичка с маленькими крыльями, клювом и большими глазами' },
+    { em: '🐝', name: 'Пчёлка', desc: 'пухлая пчёлка с полосками, прозрачными крылышками и усиками' },
+    { em: '🚀', name: 'Ракета', desc: 'маленькая ракета с круглым окошком-иллюминатором и огоньком из сопла' },
+    { em: '🐟', name: 'Рыбка', desc: 'круглая рыбка с хвостом, плавником и большими глазами' },
+    { em: '🐲', name: 'Дракончик', desc: 'добрый маленький дракончик с крылышками, рожками и хвостиком' },
+    { em: '🦄', name: 'Единорог', desc: 'маленький летающий единорог с крыльями, рогом и гривой' },
+    { em: '✈️', name: 'Самолётик', desc: 'игрушечный самолётик с пропеллером и улыбкой на носу' },
+    { em: '🐱', name: 'Котик', desc: 'летающий котик с ушками, усами и крылышками на спине' },
+  ],
+  color: [
+    { name: 'Красный', hex: '#FF4D4D' },
+    { name: 'Оранжевый', hex: '#FF9A3D' },
+    { name: 'Жёлтый', hex: '#FFD43B' },
+    { name: 'Зелёный', hex: '#3DCC6E' },
+    { name: 'Голубой', hex: '#3DC5FF' },
+    { name: 'Синий', hex: '#3D6BFF' },
+    { name: 'Фиолетовый', hex: '#8B5CF6' },
+    { name: 'Розовый', hex: '#FF6FB5' },
+  ],
+  loc: [
+    { em: '☁️', name: 'Небо', bg: 'linear-gradient(#6EC8FF,#D6F1FF)', ground: '#7BD66B',
+      desc: 'солнечный день: голубое небо с градиентом, пушистые белые облака, солнце, внизу зелёная трава' },
+    { em: '🌌', name: 'Космос', bg: 'linear-gradient(#150B3A,#3B1F7A)', ground: '#5A4B8A',
+      desc: 'космос: тёмно-фиолетовое небо, мерцающие звёзды, далёкие планеты, внизу поверхность луны с кратерами' },
+    { em: '🌊', name: 'Под водой', bg: 'linear-gradient(#1FA8D9,#0B4F8A)', ground: '#E8C97A',
+      desc: 'подводный мир: сине-бирюзовая вода, пузырьки поднимаются вверх, водоросли, внизу песчаное дно' },
+    { em: '🌲', name: 'Лес', bg: 'linear-gradient(#A8E6A1,#E9FBD8)', ground: '#5B8C3A',
+      desc: 'сказочный лес: светло-зелёный фон, силуэты ёлок вдали, грибы и цветы, внизу лесная поляна' },
+    { em: '🌃', name: 'Ночной город', bg: 'linear-gradient(#1B1F4B,#4A3F8C)', ground: '#2A2A3D',
+      desc: 'ночной город: тёмно-синее небо, луна, звёзды, силуэты домов с жёлтыми окошками, внизу дорога' },
+    { em: '🍭', name: 'Страна сладостей', bg: 'linear-gradient(#FFC2E2,#FFF1C9)', ground: '#FF8FC7',
+      desc: 'страна сладостей: розово-кремовое небо, облака из сахарной ваты, внизу земля из розовой глазури' },
+    { em: '❄️', name: 'Зима', bg: 'linear-gradient(#BFE4FF,#F5FBFF)', ground: '#FFFFFF',
+      desc: 'зима: светло-голубое небо, падают снежинки, вдали заснеженные ёлки, внизу белые сугробы' },
+    { em: '🏜️', name: 'Пустыня', bg: 'linear-gradient(#FFB56B,#FFE9A8)', ground: '#E0A84F',
+      desc: 'пустыня: оранжево-жёлтое небо, большое солнце, вдали барханы и пирамиды, внизу песок' },
+  ],
+  obs: [
+    { em: '🟩', name: 'Трубы', col: '#3DCC6E', desc: 'зелёные трубы с широким ободком на конце' },
+    { em: '✏️', name: 'Карандаши', col: '#FFC533', desc: 'огромные цветные карандаши с заточенным кончиком, направленным к просвету' },
+    { em: '🌳', name: 'Деревья', col: '#8B5A2B', desc: 'стволы деревьев с зелёной кроной на конце' },
+    { em: '☄️', name: 'Астероиды', col: '#8D8D9B', desc: 'столбы из серых каменных астероидов с кратерами' },
+    { em: '🪸', name: 'Кораллы', col: '#FF7A6B', desc: 'столбы из ярких кораллов и водорослей' },
+    { em: '🧊', name: 'Сосульки', col: '#8FDCFF', desc: 'ледяные столбы и сосульки с блеском' },
+    { em: '🍬', name: 'Леденцы', col: '#FF6FB5', desc: 'полосатые леденцы-трости в розово-белую полоску' },
+    { em: '🏢', name: 'Небоскрёбы', col: '#5C6B8A', desc: 'высокие дома-небоскрёбы с рядами светящихся окон' },
+  ],
+  subj: [
+    { id: 'math', em: '➕', name: 'Математика' },
+    { id: 'rus', em: '✍️', name: 'Русский язык' },
+    { id: 'world', em: '🌍', name: 'Окружающий мир' },
+    { id: 'eng', em: '🇬🇧', name: 'Английский' },
+    { id: 'logic', em: '🧩', name: 'Логика' },
+  ],
+  grade: [ { em: '1️⃣', name: '1 класс' }, { em: '2️⃣', name: '2 класс' } ],
+  speed: [
+    { em: '🐢', name: 'Медленно', desc: 'медленная (около 120 пикселей в секунду), расстояние между препятствиями большое' },
+    { em: '🐇', name: 'Обычно', desc: 'средняя (около 170 пикселей в секунду)' },
+    { em: '⚡', name: 'Быстро', desc: 'быстрая (около 230 пикселей в секунду), но всё ещё проходимая для ребёнка' },
+  ],
+  lives: [ { em: '❤️', name: '3 жизни', n: 3 }, { em: '💖', name: '5 жизней', n: 5 }, { em: '♾️', name: 'Без конца', n: 0 } ],
+};
+
+const TASKS = {
+  math: [
+    'генерируй примеры СЛУЧАЙНО кодом (не из готового списка): сложение и вычитание в пределах 10 и в пределах 20 (ответ никогда не отрицательный); сравнение двух чисел (варианты ответа: «>», «<», «=»); «какое число идёт после 7?», «какое число стоит перед 10?»',
+    'генерируй примеры СЛУЧАЙНО кодом (не из готового списка): сложение и вычитание в пределах 100 (ответ никогда не отрицательный); таблица умножения на 2, 3, 4 и 5; сравнение двух чисел (варианты ответа: «>», «<», «=»); короткие задачи в одно действие («У Маши 12 конфет, 5 она съела. Сколько осталось?»)',
+  ],
+  rus: [
+    'запиши в коде массив минимум из 30 заданий: вставь пропущенную букву в сочетаниях жи–ши, ча–ща, чу–щу («маш_на» → и); сколько слогов в слове; гласная или согласная буква; на какую букву начинается слово; какое слово пишется с большой буквы (имена, клички, города)',
+    'запиши в коде массив минимум из 30 заданий: безударная гласная в корне («в_да» → о); парная согласная на конце слова («ду_» → б); жи–ши, ча–ща, чу–щу, чк–чн; выбери слово-противоположность (антоним); что обозначает слово — предмет, действие или признак',
+  ],
+  world: [
+    'запиши в коде массив минимум из 30 заданий: домашние и дикие животные; животные и их детёныши; времена года и их признаки; дни недели («какой день идёт после вторника?»); части растения; что полезно для здоровья',
+    'запиши в коде массив минимум из 30 заданий: живая и неживая природа; перелётные и зимующие птицы; месяцы и времена года; деревья, кустарники, травы; правила дорожного движения для пешехода; из чего что сделано',
+  ],
+  eng: [
+    'запиши в коде массив минимум из 30 заданий: цвета (red, blue, green…), числа от 1 до 10, животные (cat, dog, fish…). Вопрос на русском: «Как по-английски „кошка“?» или «Что значит слово „red“?»',
+    'запиши в коде массив минимум из 30 заданий: цвета, числа от 1 до 20, животные, семья (mother, brother…), школьные вещи (pen, book…), еда. Вопрос на русском: «Как по-английски „книга“?» или «Что значит слово „apple“?»',
+  ],
+  logic: [
+    'запиши в коде массив минимум из 30 заданий + часть генерируй кодом: продолжи ряд чисел (2, 4, 6, ?); что лишнее в ряду (яблоко, груша, морковь); сколько углов у фигуры; что тяжелее / выше / длиннее',
+    'запиши в коде массив минимум из 30 заданий + часть генерируй кодом: продолжи ряд чисел с шагом (5, 10, 15, ?); что лишнее в ряду; простые задачи на смекалку; сколько сторон и углов у фигуры; найди закономерность',
+  ],
+};
+
+const state = { hero: 0, color: 4, loc: 0, obs: 0, subj: new Set(['math']), grade: 0, speed: 0, lives: 0 };
+const $ = id => document.getElementById(id);
+
+function buildTiles(key) {
+  const box = $(key);
+  DATA[key].forEach((item, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tile';
+    b.innerHTML = key === 'color'
+      ? `<span class="dot" style="background:${item.hex}"></span><span>${item.name}</span>`
+      : `<span class="em">${item.em}</span><span>${item.name}</span>`;
+    b.addEventListener('click', () => {
+      if (key === 'subj') {
+        const s = state.subj;
+        if (s.has(item.id)) { if (s.size > 1) s.delete(item.id); } else s.add(item.id);
+      } else state[key] = i;
+      update();
+    });
+    box.appendChild(b);
+  });
+}
+
+function gameTitle() { return $('title').value.trim() || 'Весёлый полёт'; }
+
+function buildPrompt() {
+  const hero = DATA.hero[state.hero], color = DATA.color[state.color];
+  const loc = DATA.loc[state.loc], obs = DATA.obs[state.obs];
+  const speed = DATA.speed[state.speed], lives = DATA.lives[state.lives];
+  const g = state.grade, gradeNum = g + 1, age = g === 0 ? '6–7' : '7–8';
+  const subjects = DATA.subj.filter(s => state.subj.has(s.id));
+  const subjLines = subjects.map(s => `- ${s.name} (${gradeNum} класс): ${TASKS[s.id][g]}.`).join('\n');
+  const mixLine = subjects.length > 1
+    ? `- Предметов несколько (${subjects.map(s => s.name).join(', ')}) — чередуй их случайно, над заданием показывай название предмета.`
+    : `- Над заданием показывай название предмета: «${subjects[0].name}».`;
+
+  const livesRules = lives.n
+    ? `5. У игрока ${lives.n} жизни-сердечка (${lives.n} шт.). Верный ответ жизнь НЕ отнимает. Неверный ответ отнимает одно сердечко.
+6. Когда сердечки закончились — экран «Игра окончена»: счёт, лучший результат, сколько заданий решено верно и большая кнопка «Играть ещё раз».`
+    : `5. Жизни бесконечные: проиграть нельзя. После неверного ответа сразу дай ещё одно, другое задание — и так, пока ребёнок не ответит верно.
+6. В углу экрана маленькая кнопка «Заново», которая обнуляет счёт и начинает игру сначала.`;
+
+  return `# Роль
+Ты — опытный разработчик детских обучающих HTML5-игр. Ты пишешь аккуратный, полностью рабочий код с первого раза.
+
+# Задача
+Создай браузерную игру «${gameTitle()}» для ребёнка ${age} лет (${gradeNum} класс).
+Жанр: аркада-леталка с управлением одной кнопкой. Персонаж сам летит вправо, игрок нажатиями подбрасывает его вверх и пролетает в просветы между препятствиями.
+Главная особенность: при столкновении игра НЕ заканчивается, а задаёт школьное задание.
+Это оригинальная игра: не используй названия, персонажей и графику существующих игр.
+
+# Формат ответа (строго)
+1. Ровно один файл index.html. HTML, CSS и JavaScript — внутри него, одним блоком кода \`\`\`html.
+2. Никаких внешних библиотек, картинок, шрифтов, ссылок и CDN. Вся графика рисуется кодом на <canvas> (фигуры, градиенты), звуки — через Web Audio API.
+3. Код полный: от <!DOCTYPE html> до </html>. Запрещено сокращать, писать «остальной код здесь», оставлять заглушки и TODO.
+4. Весь текст в игре — на русском языке. Комментарии в коде — на русском.
+5. После блока кода напиши не больше трёх предложений о том, как играть. Больше ничего не добавляй.
+
+# Персонаж
+- Кто: ${hero.name.toLowerCase()} — ${hero.desc}.
+- Основной цвет: ${color.name.toLowerCase()} (${color.hex}). Детали — более тёмным и более светлым оттенком этого же цвета, глаза белые с чёрным зрачком.
+- Нарисуй персонажа кодом на canvas, не эмодзи. Размер — примерно 8% высоты экрана.
+- Анимация: взмах при нажатии, наклон вверх при взлёте и вниз при падении.
+
+# Локация
+- ${loc.desc[0].toUpperCase() + loc.desc.slice(1)}.
+- Фон медленно прокручивается (параллакс: дальний слой медленнее, ближний быстрее).
+
+# Препятствия
+- Вид: ${obs.name.toLowerCase()} — ${obs.desc}. Основной цвет ${obs.col}.
+- Идут парами: одно сверху, другое снизу, между ними просвет. Высота просвета случайная по положению, но всегда одинаково широкая.
+- Нарисуй кодом на canvas, в одном стиле с локацией.
+
+# Управление и физика
+- Взмах вверх: клавиша «Пробел», клик мышью или касание пальцем по экрану. Используй событие pointerdown и keydown.
+- Игра для малышей, поэтому всё мягко: слабая гравитация, плавный взмах, просвет между препятствиями — около 38% высоты экрана.
+- Скорость полёта: ${speed.desc}. Скорость не растёт со временем.
+- Canvas занимает всё окно и подстраивается при изменении размера (resize). Игра одинаково работает на телефоне и на компьютере.
+- Используй requestAnimationFrame и deltaTime, чтобы скорость не зависела от частоты экрана.
+- Стартовый экран: название «${gameTitle()}», персонаж и большая кнопка «Играть». Игра начинается после первого нажатия.
+
+# Главная механика: врезался — реши задание
+1. Столкновение с препятствием, землёй или верхним краем ставит игру на ПАУЗУ. Это не «конец игры».
+2. Поверх игры появляется большое окно: текст задания (шрифт не меньше 28px) и 3 крупные кнопки с ответами (высота кнопки не меньше 64px). Правильный ответ стоит на случайном месте.
+3. Ответ верный: похвала («Молодец!», «Супер!», «Так держать!»), +1 звезда, весёлый звук. Окно закрывается, персонаж появляется по центру в безопасном месте, 2 секунды мигает и неуязвим, игра продолжается с тем же счётом.
+4. Ответ неверный: мягко покажи правильный ответ и объяснение в одну строку («Правильно: 7, потому что 3 + 4 = 7»). Не пиши слова «ошибка», «неправильно», «плохо». Кнопка «Понятно» закрывает окно, и игра продолжается так же, как после верного ответа, но без звезды.
+${livesRules}
+7. Пока окно с заданием открыто, нажатия не управляют персонажем. У задания нет таймера — ребёнок думает сколько нужно.
+
+# Задания
+${subjLines}
+${mixLine}
+- Всегда ровно 3 варианта ответа: один верный и два неверных. Неверные — правдоподобные, близкие к верному. Варианты не повторяются.
+- Одно и то же задание не выпадает два раза подряд.
+- Формулировки короткие и простые, как в учебнике для ${gradeNum} класса.
+
+# Интерфейс
+- Вверху экрана крупно: счёт (сколько препятствий пройдено), звёзды за верные ответы${lives.n ? ', сердечки-жизни' : ''}.
+- Лучший результат сохраняй в localStorage (обязательно внутри try/catch).
+- Стиль яркий и добрый: скруглённые углы, крупные кнопки, контрастный текст.
+- Короткие звуки через Web Audio API: взмах, пройденное препятствие, верный ответ, неверный ответ. Звук включается только после первого нажатия игрока.
+
+# Проверь себя перед ответом
+- Игра запускается сразу после открытия файла, в консоли нет ошибок.
+- После столкновения всегда появляется задание, а после ответа игра продолжается.
+- Во всех заданиях правильный ответ действительно правильный, и он есть среди трёх кнопок.
+- Кнопки нажимаются и мышью, и пальцем.
+- Код выведен целиком, без пропусков.`;
+}
+
+function update() {
+  for (const key of Object.keys(DATA)) {
+    [...$(key).children].forEach((b, i) => {
+      const on = key === 'subj' ? state.subj.has(DATA.subj[i].id) : state[key] === i;
+      b.setAttribute('aria-pressed', on);
+    });
+  }
+  const hero = DATA.hero[state.hero], color = DATA.color[state.color];
+  const loc = DATA.loc[state.loc], obs = DATA.obs[state.obs];
+  $('scene').style.background = loc.bg;
+  document.querySelector('.ground').style.background = loc.ground;
+  document.querySelectorAll('.pipe').forEach(p => { p.style.background = obs.col; p.textContent = obs.em; });
+  $('heroPrev').style.background = color.hex;
+  $('heroPrev').textContent = hero.em;
+  $('sceneTitle').textContent = gameTitle();
+  const subs = DATA.subj.filter(s => state.subj.has(s.id)).map(s => s.em + ' ' + s.name);
+  $('sum').innerHTML = [hero.em + ' ' + hero.name, color.name, loc.em + ' ' + loc.name, obs.em + ' ' + obs.name,
+    ...subs, DATA.grade[state.grade].name, DATA.speed[state.speed].em + ' ' + DATA.speed[state.speed].name,
+    DATA.lives[state.lives].em + ' ' + DATA.lives[state.lives].name]
+    .map(t => `<li>${t}</li>`).join('');
+  $('prompt').value = buildPrompt();
+}
+
+async function copyPrompt() {
+  const ta = $('prompt');
+  let ok = false;
+  try { await navigator.clipboard.writeText(ta.value); ok = true; } catch (e) {
+    ta.select();
+    try { ok = document.execCommand('copy'); } catch (e2) {}
+    window.getSelection().removeAllRanges();
+  }
+  const btn = $('copy');
+  btn.textContent = ok ? '✅ Скопировано!' : '😕 Выдели текст и нажми Ctrl+C';
+  btn.classList.toggle('done', ok);
+  clearTimeout(copyPrompt.t);
+  copyPrompt.t = setTimeout(() => { btn.textContent = '📋 Скопировать промпт'; btn.classList.remove('done'); }, 2500);
+}
+
+Object.keys(DATA).forEach(buildTiles);
+$('title').addEventListener('input', update);
+$('copy').addEventListener('click', copyPrompt);
+update();
+</script>
+</body>
+</html>
